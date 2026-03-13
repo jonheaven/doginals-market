@@ -1,3 +1,60 @@
+// ── Real On-Chain Payout Settlement ─────────────────────────────────────
+/**
+ * Settle a completed trade: winner receives payout inscription via dogestash (DMP settlement).
+ * This function is called after payment is detected and trade is marked as completed.
+ */
+async function settleTradePayout(trade: Trade): Promise<string> {
+  if (!trade || trade.status !== "payment_detected" || !trade.paymentTxid || !trade.paymentAddress) {
+    throw new Error("Trade not ready for settlement");
+  }
+  // Find the inscription UTXO
+  const utxo = await getInscriptionUtxo(trade.inscriptionId);
+  if (!utxo) throw new Error("Inscription UTXO not found");
+  // Use Dogestash to create, sign, and broadcast the DMP settlement
+  const payoutTxid = await deliverInscription(utxo.txid, utxo.vout, trade.paymentAddress);
+  trade.deliveryTxid = payoutTxid;
+  trade.status = "completed";
+  await saveStore(await loadStore());
+  return payoutTxid;
+}
+
+// Example: Call this after payment is detected and trade is ready for payout
+// await settleTradePayout(trade);
+// ── My Trades UI Section (Basic) ────────────────────────────────────────
+/**
+ * Simple CLI/console UI for "My Trades" (active/completed) using kabosu data.
+ * In a real web UI, this would be a React component or page.
+ */
+async function showMyTrades() {
+  const store = await loadStore();
+  const trades = store.trades;
+  if (!trades.length) {
+    console.log("No trades found.");
+    return;
+  }
+  console.log("\n=== My Trades ===");
+  for (const t of trades) {
+    const kabosu = await fetch(`${KABOSU_API}/doginals/v1/inscriptions/${t.inscriptionId}`);
+    let kabosuData = null;
+    if (kabosu.ok) kabosuData = await kabosu.json();
+    console.log(`Trade #${t.id}: ${t.name} [${t.status}]`);
+    console.log(`  Inscription: ${t.inscriptionId}`);
+    if (kabosuData) {
+      console.log(`  Owner: ${kabosuData.address}  Number: ${kabosuData.number}`);
+    }
+    if (t.status === "completed") {
+      console.log(`  Winner: ${t.paymentAddress}`);
+      console.log(`  Delivery txid: ${t.deliveryTxid}`);
+    } else if (t.status === "payment_detected") {
+      console.log(`  Awaiting payout settlement...");
+    } else {
+      console.log(`  Min price: ${t.minPrice} koinu`);
+    }
+    console.log("");
+  }
+}
+
+// Example: To show trades, run: await showMyTrades();
 /**
  * Safe Ordinals Trading System for Tiny Marten
  *

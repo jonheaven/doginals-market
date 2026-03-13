@@ -1,3 +1,12 @@
+# End-to-End Flow
+
+1. Seller lists a Doginal for sale (creates a partially signed PSBT via dogestash).
+2. Buyer reviews and accepts the listing, verifies Doginal and price.
+3. Buyer signs and funds the swap using dogestash (DMP intent, PSBT atomic swap).
+4. Payment is detected on-chain (kabosu indexer).
+5. Winner receives the payout inscription on-chain (dogestash DMP settlement, real delivery).
+6. All trades (active/completed) can be viewed in the "My Trades" section (CLI or UI).
+
 # ---
 
 ## Dogecoin-Native Implementation

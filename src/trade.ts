@@ -41,42 +41,7 @@ const OUR_DOGE = "D7Y55Qw1k1Qw1k1Qw1k1Qw1k1Qw1k1Qw1k";
 
 // ── Storage, Helper, and Core Functions (Dogecoin-native only) ─────────────
 
-// ── Real On-Chain Payout Settlement ────────────────────────────
-async function settleTradePayout(trade: Trade): Promise<string> {
-  if (!trade || trade.status !== "payment_detected" || !trade.paymentTxid || !trade.paymentAddress) {
-    throw new Error("Trade not ready for settlement: must be payment_detected with paymentTxid and paymentAddress.");
-  }
-  let utxo = null;
-  let attempts = 0;
-  while (!utxo && attempts < 3) {
-    try {
-      utxo = await getInscriptionUtxo(trade.inscriptionId);
-    } catch (err) {
-      console.error(`Attempt ${attempts + 1}: Failed to fetch inscription UTXO: ${err}`);
-    }
-    if (!utxo) {
-      await new Promise(r => setTimeout(r, 2000));
-      attempts++;
-    }
-  }
-  if (!utxo) throw new Error(`Inscription UTXO not found after ${attempts} attempts. Please retry later.`);
-  let payoutTxid = "";
-  attempts = 0;
-  while (!payoutTxid && attempts < 3) {
-    try {
-      payoutTxid = await deliverInscription(utxo.txid, utxo.vout, trade.paymentAddress);
-    } catch (err) {
-      console.error(`Attempt ${attempts + 1}: Payout delivery failed: ${err}`);
-      await new Promise(r => setTimeout(r, 2000));
-      attempts++;
-    }
-  }
-  if (!payoutTxid) throw new Error(`Failed to deliver payout after ${attempts} attempts. Please check network and retry.`);
-  trade.deliveryTxid = payoutTxid;
-  trade.status = "completed";
-  await saveStore(await loadStore());
-  return payoutTxid;
-}
+
 
 // ── My Trades UI Section (Basic) ───────────────────────────────
 async function showMyTrades() {
@@ -683,33 +648,7 @@ async function completeBuyerPSBT(
   return signed.tx_hex;
 }
 
-// ── Reputation Feedback (shells out to give-feedback.ts) ────────────────
 
-async function giveFeedback(
-  agentId: number,
-  score: number,
-  tag1: string,
-  tag2: string
-): Promise<void> {
-  console.log(`Giving feedback: agent=${agentId} score=${score} tags=${tag1},${tag2}`);
-  const proc = Bun.spawn(
-    [
-      "bun",
-      "give-feedback.ts",
-      String(agentId),
-      String(score),
-      tag1,
-      tag2,
-    ],
-    {
-      cwd: new URL(".", import.meta.url).pathname,
-      env: process.env,
-      stdout: "inherit",
-      stderr: "inherit",
-    }
-  );
-  await proc.exited;
-}
 
 // ── Human Challenge (anti-automation gate) ──────────────────────────────
 

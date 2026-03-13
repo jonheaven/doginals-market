@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 // @ts-ignore
-import { settleTradePayout } from "./trade";
+
 import "./my-trades.css";
 import "./my-trades-spinner.css";
 
@@ -72,45 +72,6 @@ function MyTradesPage() {
               <div className="mytrades-completed">
                 <div>Buyer: {t.paymentAddress}</div>
                 <div>Delivery txid: <span className="mytrades-txid">{t.deliveryTxid}</span></div>
-              </div>
-            ) : t.status === "payment_detected" ? (
-              <div className="mytrades-payout">
-                <button
-                  className="mytrades-button"
-                  disabled={loadingId === t.id}
-                  onClick={async () => {
-                    setLoadingId(t.id);
-                    setToast(null);
-                    try {
-                      const txid = await settleTradePayout(t);
-                      setToast({ type: "success", message: `Payout delivered! Txid: ${txid}` });
-                      // Refresh trades after payout
-                      const updated = await fetchTrades();
-                      setTrades(updated);
-                    } catch (err: any) {
-                      setToast({ type: "error", message: `Payout failed: ${err?.message || err}` });
-                    } finally {
-                      setLoadingId(null);
-                      setTimeout(() => setToast(null), 4200);
-                    }
-                  }}
-                >
-                  {loadingId === t.id ? (
-                    <span className="mytrades-spinner-container">
-                      <span className="mytrades-spinner"></span>
-                      Claiming...
-                    </span>
-                  ) : "Claim Payout"}
-                </button>
-                <style>{`
-                  @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                  }
-                  .spinner {
-                    display: inline-block;
-                  }
-                `}</style>
               </div>
             ) : (
               <div className="mytrades-minprice">Min price: {t.minPrice} koinu</div>

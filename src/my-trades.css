@@ -1,0 +1,93 @@
+/* My Trades Page Styles */
+.mytrades-container {
+  padding: 2rem;
+  background: #181818;
+  color: #fff;
+  min-height: 100vh;
+}
+.mytrades-title {
+  font-size: 2rem;
+  margin-bottom: 1.5rem;
+}
+.mytrades-toast {
+  position: fixed;
+  top: 2rem;
+  right: 2rem;
+  color: #fff;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 1rem;
+  z-index: 1000;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+}
+.mytrades-toast-success {
+  background: #16a34a;
+}
+.mytrades-toast-error {
+  background: #dc2626;
+}
+.mytrades-card {
+  margin-bottom: 1.5rem;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 1rem;
+  background: #232323;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.mytrades-name {
+  font-size: 1.2rem;
+}
+.mytrades-status {
+  color: #facc15;
+  font-weight: 600;
+}
+.mytrades-inscription {
+  margin-top: 0.5rem;
+}
+.mytrades-owner {
+  margin-top: 0.3rem;
+  color: #d1fae5;
+}
+.mytrades-completed {
+  margin-top: 0.7rem;
+}
+.mytrades-txid {
+  color: #38bdf8;
+}
+.mytrades-payout {
+  margin-top: 0.7rem;
+}
+.mytrades-button {
+  background: linear-gradient(90deg,#facc15,#fbbf24);
+  color: #181818;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 0.7rem 1.4rem;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(250,204,21,0.18);
+  margin-bottom: 0.5rem;
+}
+.mytrades-button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.mytrades-spinner {
+  width: 1.2em;
+  height: 1.2em;
+  border: 3px solid #facc15;
+  border-top: 3px solid #fff;
+  border-radius: 50%;
+  margin-right: 0.7em;
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.mytrades-minprice {
+  margin-top: 0.7rem;
+}

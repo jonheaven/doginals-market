@@ -99,6 +99,8 @@ import * as btc from "@scure/btc-signer";
 import { hex, base64 } from "@scure/base";
 import { createHmac } from "crypto";
 import { signDMPIntent } from "@jonheaven/dogestash";
+import config from "../marketplace.config";
+import { publishNostrListing } from "./nostr";
 
 
 // ── Dogecoin Network Config ─────────────────────────────────────────────
@@ -837,7 +839,54 @@ function printTrade(trade: Trade): void {
   }
 }
 
-// ── Commands ────────────────────────────────────────────────────────────
+// ── Listing Creation with Nostr Publishing ──────────────────────────────
+
+/**
+ * Create a new listing and publish to Nostr relays if enabled.
+ */
+async function createListing(inscriptionId: string, minPrice: number, name: string) {
+  // ...existing listing creation logic...
+  // (Assume trade object is created and added to store)
+  const trade: Trade = {
+    id: Date.now(),
+    inscriptionId,
+    name,
+    minPrice,
+    agreedPrice: null,
+    counterparty: null,
+    status: "listed",
+    humanApproved: false,
+    paymentAddress: null,
+    paymentTxid: null,
+    deliveryTxid: null,
+    paymentConfirmations: 0,
+    psbtBase64: null,
+    atomicTxid: null,
+    negotiationLog: [],
+    createdAt: new Date().toISOString(),
+    timeoutAt: null
+  };
+  // Save to store
+  const store = await loadStore();
+  store.trades.push(trade);
+  await saveStore(store);
+  // Publish to Nostr relays if enabled
+  if (config.nostr?.enabled) {
+    try {
+      await publishNostrListing({
+        inscriptionId,
+        price_koinu: minPrice,
+        name,
+        createdAt: trade.createdAt,
+        tradeId: trade.id
+      });
+      console.log("[NOSTR] Listing published to relays");
+    } catch (err) {
+      console.warn("[NOSTR] Failed to publish listing:", err);
+    }
+  }
+  return trade;
+}
 
 async function cmdList(args: string[]): Promise<void> {
   const inscriptionId = args[0];

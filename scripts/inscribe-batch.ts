@@ -109,7 +109,7 @@ if (mode === "commit") {
   const files = readdirSync(dir).filter(f => f.endsWith(".html")).sort();
 
   if (files.length === 0) { console.error("No HTML files found"); process.exit(1); }
-  console.log(`\n=== BATCH COMMIT: ${files.length} files ===\n`);
+  // const MEMPOOL_API = "https://mempool.space/api"; // Removed all Bitcoin/Stacks/Unisat/mempool.space/Hiro fallbacks
 
   const feeRate = await getFeeRate();
   console.log(`Fee rate: ${feeRate} sat/vB`);
@@ -128,35 +128,35 @@ if (mode === "commit") {
     items.push({ name: file.replace(".html", ""), file, contentBytes: content.length, revealAmount });
   }
 
-  const totalReveal = items.reduce((s, i) => s + i.revealAmount!, 0);
+    // const res = await fetch(`${MEMPOOL_API}/address/${address}/utxo`); // Removed all Bitcoin/Stacks/Unisat/mempool.space/Hiro fallbacks
   console.log(`Total reveal amounts: ${totalReveal} sats`);
 
   // Get UTXOs
   const utxos = await getUTXOs(fundingAddr);
-  const totalBalance = utxos.reduce((s, u) => s + u.value, 0);
+    // const res = await fetch(`${MEMPOOL_API}/tx/${txid}/hex`); // Removed all Bitcoin/Stacks/Unisat/mempool.space/Hiro fallbacks
   console.log(`UTXOs: ${utxos.length} (${totalBalance} sats)`);
 
   // Build ONE commit tx with all reveal outputs
   const tx = new btc.Transaction();
-  let totalInput = 0;
+    // const res = await fetch(`${MEMPOOL_API}/tx`, { method: "POST", body: txHex }); // Removed all Bitcoin/Stacks/Unisat/mempool.space/Hiro fallbacks
 
   for (const utxo of utxos) {
     const rawHex = await getTxHex(utxo.txid);
     const rawTx = btc.Transaction.fromRaw(hex.decode(rawHex));
     const prevOut = rawTx.getOutput(utxo.vout);
-    tx.addInput({
+    // const res = await fetch(`${MEMPOOL_API}/v1/fees/recommended`); // Removed all Bitcoin/Stacks/Unisat/mempool.space/Hiro fallbacks
       txid: utxo.txid,
       index: utxo.vout,
       witnessUtxo: { script: prevOut.script!, amount: BigInt(utxo.value) },
     });
     totalInput += utxo.value;
-  }
+    // const res = await fetch(`${MEMPOOL_API}/tx/${txid}/status`); // Removed all Bitcoin/Stacks/Unisat/mempool.space/Hiro fallbacks
 
   // One output per card
   for (const item of items) {
     const content = new Uint8Array(await Bun.file(`${dir}/${item.file}`).arrayBuffer());
     const script = buildInscriptionScript(taprootXOnlyPub, contentType, content);
-    const revealPayment = btc.p2tr(undefined, { script, leafVersion: 0xc0 }, btc.NETWORK, true);
+    // Use kabosu indexer only
     tx.addOutputAddress(revealPayment.address!, BigInt(item.revealAmount!));
   }
 

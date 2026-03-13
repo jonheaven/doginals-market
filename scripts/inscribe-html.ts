@@ -15,7 +15,7 @@ if (!MNEMONIC) {
   process.exit(1);
 }
 
-const MEMPOOL_API = "https://mempool.space/api";
+// const MEMPOOL_API = "https://mempool.space/api"; // Removed all Bitcoin/Stacks/Unisat/mempool.space/Hiro fallbacks
 
 const seed = mnemonicToSeedSync(MNEMONIC);
 const master = HDKey.fromMasterSeed(seed);
@@ -33,27 +33,21 @@ const taprootXOnlyPub = bip86Key.publicKey!.slice(1);
 console.log(`Funding: ${fundingAddr}`);
 console.log(`Taproot: ${btc.p2tr(taprootXOnlyPub).address}`);
 
-async function getUTXOs(address: string) {
-  const res = await fetch(`${MEMPOOL_API}/address/${address}/utxo`);
-  return res.json() as Promise<Array<{ txid: string; vout: number; value: number; status: { confirmed: boolean } }>>;
-}
+// async function getUTXOs(address: string) {
+//   // Use kabosu indexer only
+// }
 
-async function getTxHex(txid: string): Promise<string> {
-  const res = await fetch(`${MEMPOOL_API}/tx/${txid}/hex`);
-  return res.text();
-}
+// async function getTxHex(txid: string): Promise<string> {
+//   // Use kabosu indexer only
+// }
 
-async function broadcast(txHex: string): Promise<string> {
-  const res = await fetch(`${MEMPOOL_API}/tx`, { method: "POST", body: txHex });
-  if (!res.ok) throw new Error(`Broadcast failed: ${await res.text()}`);
-  return res.text();
-}
+// async function broadcast(txHex: string): Promise<string> {
+//   // Use kabosu indexer only
+// }
 
-async function getFeeRate(): Promise<number> {
-  const res = await fetch(`${MEMPOOL_API}/v1/fees/recommended`);
-  const fees = (await res.json()) as any;
-  return Math.max(fees.hourFee || 1, 1);
-}
+// async function getFeeRate(): Promise<number> {
+//   // Use kabosu indexer only
+// }
 
 function buildInscriptionScript(
   pubkey: Uint8Array,

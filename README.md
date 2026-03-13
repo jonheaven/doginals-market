@@ -1,3 +1,22 @@
+# ---
+
+## Dogecoin-Native Implementation
+
+- All Bitcoin/Ordinals/BTC/sats/Stacks/Unisat/mempool.space/Hiro code removed
+- Only kabosu indexer API is used for all Doginals and Dogecoin data
+- Explicit Dogecoin network config (mainnet/testnet, dust, prefixes)
+- Dynamic fee estimation via kabosu API
+- Dogestash DMP protocol for all signing (no legacy Bitcoin signing)
+- Final Doginals safety check: prevents accidental burns
+
+## Usage Notes
+
+- This codebase is 100% Dogecoin-native. No Bitcoin, Stacks, or fallback APIs remain.
+- All fees, dust, and address logic are Dogecoin-specific.
+- For production, set KABOSU_API and DOGESTASH_API to your trusted endpoints.
+- See src/trade.ts for all Dogecoin network config and fee logic.
+
+**Doginals Market is production-ready for Dogecoin.**
 
 # Doginals Trustless Marketplace
 

@@ -1,4 +1,24 @@
+.mytrades-spinner {
+  width: 1.1em;
+  height: 1.1em;
+  border: 2px solid rgba(236, 72, 153, 0.35);
+  border-top-color: #22d3ee;
+  border-radius: 50%;
+  margin-right: 0.6em;
+  animation: mytrades-spin 0.9s linear infinite;
+  display: inline-block;
+}
+
+@keyframes mytrades-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .mytrades-spinner-container {
   display: inline-flex;
   align-items: center;
+  margin-top: 0.8rem;
+  color: #d8b4fe;
+  font-size: 0.85rem;
 }

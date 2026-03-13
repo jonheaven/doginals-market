@@ -1,0 +1,16 @@
+{
+  "name": "ordinals-market",
+  "version": "0.1.0",
+  "description": "P2P ordinals marketplace for AIBTC agents. PSBT atomic swaps, trade ledger, agent cards.",
+  "scripts": {
+    "trade": "bun src/trade.ts",
+    "inscribe": "bun scripts/inscribe-html.ts",
+    "inscribe-batch": "bun scripts/inscribe-batch.ts",
+    "generate-cards": "bun art/generate-cards.ts"
+  },
+  "dependencies": {
+    "@scure/bip32": "^2.0.1",
+    "@scure/bip39": "^2.0.1",
+    "@scure/btc-signer": "^2.0.1"
+  }
+}

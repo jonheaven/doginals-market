@@ -329,10 +329,11 @@ function sanitizeString(s: unknown, maxLen: number): string | null {
   return cleaned.length > 0 ? cleaned : null;
 }
 
-/** Validate BTC address format (bech32 only — bc1q or bc1p) */
-function isValidBtcAddress(s: unknown): boolean {
+/** Validate Dogecoin address format (P2PKH D... or A...) */
+function isValidDogeAddress(s: unknown): boolean {
   if (typeof s !== "string") return false;
-  return /^bc1[qp][a-z0-9]{38,60}$/.test(s);
+  // Dogecoin P2PKH starts with D or A, 34 chars
+  return /^[DA9][a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(s);
 }
 
 /** Validate inscription ID format (64-char hex + i + digit(s)) */
@@ -347,9 +348,9 @@ function isValidTxid(s: unknown): boolean {
   return /^[a-f0-9]{64}$/.test(s);
 }
 
-/** Validate price is a safe integer in a sane range */
+/** Validate price is a safe integer in a sane range (koinu) */
 function isValidPrice(p: unknown): boolean {
-  return typeof p === "number" && Number.isInteger(p) && p > 0 && p <= 100_000_000_000;
+  return typeof p === "number" && Number.isInteger(p) && p > 0 && p <= 100_000_000_000_000;
 }
 
 /**
@@ -403,7 +404,7 @@ function parseTradeMessage(content: string): TradeMessage | null {
     case "confirm": {
       if (keys !== "a,amt,i,pay,t") return null;
       if (!isValidInscriptionId(parsed.i)) return null;
-      if (!isValidBtcAddress(parsed.pay)) return null;
+      if (!isValidDogeAddress(parsed.pay)) return null;
       if (!isValidPrice(parsed.amt)) return null;
       return { t: "trade", a: "confirm", i: parsed.i, pay: parsed.pay, amt: parsed.amt };
     }
@@ -439,7 +440,7 @@ function parseTradeMessage(content: string): TradeMessage | null {
   }
 }
 
-// ── Inscription Delivery (from send-inscription.ts) ─────────────────────
+// ── Doginal Delivery (Dogecoin, Scrypt/AuxPoW ready) ───────────────────
 
 async function getUTXOs(address: string) {
   const res = await fetch(`${MEMPOOL_API}/address/${address}/utxo`);
@@ -512,13 +513,13 @@ async function deliverInscription(
     },
   });
 
-  // Output 0: inscription to recipient
-  tx.addOutputAddress(recipientAddress, BigInt(546));
+  // Output 0: doginal to recipient (Dogecoin dust limit: 1 DOGE = 100,000,000 koinu)
+  tx.addOutputAddress(recipientAddress, BigInt(100_000_000));
 
-  // Fee estimate: ~200 vB at 1 sat/vB
+  // Fee estimate: ~200 bytes at 1 koinu/byte
   const fee = 200;
   const change = feeUtxo.value - fee;
-  if (change > 546) {
+  if (change > 100_000_000) {
     tx.addOutputAddress(fundingAddr, BigInt(change));
   }
 
@@ -535,7 +536,7 @@ async function deliverInscription(
   return txid;
 }
 
-// ── PSBT Atomic Swap Functions ───────────────────────────────────────────
+// ── PSBT Atomic Swap Functions (Dogecoin, Scrypt/AuxPoW, FIFO koinu) ─────
 
 /**
  * Get the current UTXO holding an inscription from Hiro API.

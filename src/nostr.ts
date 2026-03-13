@@ -2,7 +2,9 @@
 // Publishes listings to configured relays for censorship resistance
 // Usage: import and call publishNostrListing(listing)
 
+
 import config from "../marketplace.config";
+import { signDMPIntent } from "@jonheaven/dogestash";
 
 export interface NostrRelay {
   url: string;
@@ -27,9 +29,11 @@ function getRelays(): NostrRelay[] {
 export async function publishNostrListing(listing: any, pubkey?: string) {
   const relays = getRelays();
   if (!relays.length) return;
+  // Use configured pubkey or passed pubkey
+  const nostrPubkey = pubkey || config.nostr.pubkey || "";
   const event: ListingEvent = {
     kind: config.nostr.kind || 78,
-    pubkey: pubkey || config.nostr.pubkey || "",
+    pubkey: nostrPubkey,
     created_at: Math.floor(Date.now() / 1000),
     tags: [
       ["app", "doginals-market"],
@@ -39,7 +43,16 @@ export async function publishNostrListing(listing: any, pubkey?: string) {
     ],
     content: JSON.stringify(listing)
   };
-  // TODO: sign event if pubkey/private key available
+  // Auto-sign event with dogestash if available
+  try {
+    const signed = await signDMPIntent("nostr", { event });
+    if (signed && signed.sig) {
+      event.sig = signed.sig;
+      event.pubkey = signed.pubkey || event.pubkey;
+    }
+  } catch (err) {
+    // Fallback: unsigned event
+  }
   for (const relay of relays) {
     try {
       const ws = new WebSocket(relay.url);

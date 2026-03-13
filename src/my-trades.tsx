@@ -84,8 +84,9 @@ function MyTradesPage() {
                     try {
                       const txid = await settleTradePayout(t);
                       setToast({ type: "success", message: `Payout delivered! Txid: ${txid}` });
-                      // Refresh trades
-                      fetchTrades().then(setTrades);
+                      // Refresh trades after payout
+                      const updated = await fetchTrades();
+                      setTrades(updated);
                     } catch (err: any) {
                       setToast({ type: "error", message: `Payout failed: ${err?.message || err}` });
                     } finally {

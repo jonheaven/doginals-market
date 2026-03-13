@@ -19,7 +19,8 @@ export default {
       "wss://relay.damus.io",
       "wss://nostr.oxtr.dev"
     ],
-    pubkey: "", // Optional: set to your Nostr pubkey for signed events
+    // Nostr pubkey for event signing. Set via env NOSTR_PUBKEY or here.
+    pubkey: process.env.NOSTR_PUBKEY || "", 
     kind: 78 // NIP-78 for listing events
   }
 };

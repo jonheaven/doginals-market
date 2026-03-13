@@ -20,51 +20,39 @@ import { HDKey } from "@scure/bip32";
 import * as btc from "@scure/btc-signer";
 import { hex, base64 } from "@scure/base";
 import { createHmac } from "crypto";
+import { signDMPIntent } from "@jonheaven/dogestash";
 
 // ── Config ──────────────────────────────────────────────────────────────
 
-const MNEMONIC = process.env.AIBTC_MNEMONIC!;
+const MNEMONIC = process.env.DOGESTASH_MNEMONIC!;
 if (!MNEMONIC) {
-  console.error("[FATAL] AIBTC_MNEMONIC not set");
+  console.error("[FATAL] DOGESTASH_MNEMONIC not set");
   process.exit(1);
 }
 
-const MEMPOOL_API = "https://mempool.space/api";
-const HIRO_API = "https://api.hiro.so";
-const AIBTC_API = "https://aibtc.com/api";
+const KABOSU_API = process.env.VITE_WALLET_DATA_API_BASE_URL || "https://api.kabosu.dog";
 const TRADES_FILE = new URL("./trades.json", import.meta.url).pathname;
 
-// Our addresses
-const OUR_BTC = "bc1q5ks75ns67ykl9pel70wf4e0xtw62dt4mp77dpx";
-const OUR_OLD_BTC = "bc1qyu22hyqr406pus0g9jmfytk4ss5z8qsje74l76";
-const OUR_STX = "SPKH9AWG0ENZ87J1X0PBD4HETP22G8W22AFNVF8K";
+// Our Dogecoin address (P2PKH example)
+const OUR_DOGE = "D7Y55Qw1k1Qw1k1Qw1k1Qw1k1Qw1k1Qw1k";
 
 // Safety thresholds
-const HIGH_VALUE_SATS = 50_000; // require 3 confirmations above this
+const HIGH_VALUE_KOINU = 100_000_000; // 1 DOGE = 100,000,000 koinu
 const NEGOTIATION_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24h per step
 const PAYMENT_TIMEOUT_MS = 48 * 60 * 60 * 1000; // 48h for payment
 const POLL_INTERVAL_MS = 30_000; // check every 30s
 const MIN_COUNTERPARTY_LEVEL = 2;
 const MIN_COUNTERPARTY_CHECKINS = 50;
 
-// ── Key Derivation (matches send-inscription.ts) ────────────────────────
-
+// ── Key Derivation (Dogecoin P2PKH, Scrypt/AuxPoW ready) ────────────────
 const seed = mnemonicToSeedSync(MNEMONIC);
 const master = HDKey.fromMasterSeed(seed);
-
-// BIP84 for fee funding
-const bip84Key = master.derive("m/84'/0'/0'/0/0");
-const fundingPrivKey = bip84Key.privateKey!;
-const fundingPubKey = bip84Key.publicKey!;
-const p2wpkhPayment = btc.p2wpkh(fundingPubKey);
-const fundingAddr = p2wpkhPayment.address!;
-
-// BIP86 for taproot (where inscriptions live)
-const bip86Key = master.derive("m/86'/0'/0'/0/0");
-const taprootPrivKey = bip86Key.privateKey!;
-const taprootXOnlyPub = bip86Key.publicKey!.slice(1);
-const taprootPayment = btc.p2tr(taprootXOnlyPub);
-const taprootAddr = taprootPayment.address!;
+// Dogecoin P2PKH (m/44'/3'/0'/0/0)
+const bip44Key = master.derive("m/44'/3'/0'/0/0");
+const fundingPrivKey = bip44Key.privateKey!;
+const fundingPubKey = bip44Key.publicKey!;
+// TODO: Use Dogecoin address library for P2PKH (D...)
+const fundingAddr = OUR_DOGE;
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -185,43 +173,18 @@ function findTradeByInscription(
   );
 }
 
-// ── Verification Helpers ────────────────────────────────────────────────
+// ── Verification Helpers (Doginals, Kabosu API) ─────────────────────────
 
 async function verifyInscriptionOwnership(
   inscriptionId: string
 ): Promise<{ owned: boolean; address?: string; number?: number }> {
-  // inscriptionId can be "txid:vout" or "txidi0" — Hiro uses the i-format
-  const hiroId = inscriptionId.includes(":")
-    ? inscriptionId.replace(":", "i")
-    : inscriptionId;
-
-  const res = await fetch(`${HIRO_API}/ordinals/v1/inscriptions/${hiroId}`);
+  // Use Kabosu indexer API for Doginals
+  const res = await fetch(`${KABOSU_API}/doginals/v1/inscriptions/${inscriptionId}`);
   if (res.ok) {
-    const data = (await res.json()) as {
-      address: string;
-      number: number;
-      output: string;
-    };
-    const owned =
-      data.address === taprootAddr ||
-      data.address === fundingAddr ||
-      data.address === OUR_BTC;
+    const data = (await res.json()) as { address: string; number: number; output: string };
+    const owned = data.address === fundingAddr || data.address === OUR_DOGE;
     return { owned, address: data.address, number: data.number };
   }
-
-  // Fallback: Hiro may not have indexed yet — check mempool.space for UTXO on our taproot
-  const txid = hiroId.replace(/i\d+$/, "");
-  console.log("  Hiro not indexed yet, checking mempool.space...");
-  const utxoRes = await fetch(`${MEMPOOL_API}/address/${taprootAddr}/utxo`);
-  if (utxoRes.ok) {
-    const utxos = (await utxoRes.json()) as Array<{ txid: string; vout: number; value: number }>;
-    const match = utxos.find((u) => u.txid === txid);
-    if (match) {
-      console.log(`  Found UTXO on our taproot: ${match.txid}:${match.vout} (${match.value} sats)`);
-      return { owned: true, address: taprootAddr };
-    }
-  }
-
   return { owned: false };
 }
 
@@ -617,47 +580,23 @@ async function getInscriptionUtxo(inscriptionId: string): Promise<{
 }
 
 /**
- * Seller: create a half-signed PSBT offering an inscription for sale.
- *
- * Signs input 0 (inscription) with SIGHASH_SINGLE|ANYONECANPAY:
- * - SINGLE: locks only output 0 (seller's payment)
- * - ANYONECANPAY: locks only input 0 (seller's inscription)
- *
- * The buyer can add their own inputs (funding) and outputs (inscription receive,
- * change) without invalidating the seller's signature.
+ * Seller: create a half-signed PSBT offering a Doginal for sale.
+ * Uses Dogestash signing for DMP intent.
  */
-function createSellerPSBT(
+async function createSellerPSBT(
   inscriptionTxid: string,
   inscriptionVout: number,
   inscriptionValue: bigint,
   sellerPaymentAddress: string,
   salePrice: bigint
-): string {
-  const tx = new btc.Transaction({
-    allowUnknownOutputs: true,
-    allowUnknownInputs: true,
+): Promise<string> {
+  // Use Dogestash DMP intent signing for listing
+  const signed = await signDMPIntent('listing', {
+    price_koinu: salePrice,
+    psbt_cid: `doginals://${inscriptionTxid}:${inscriptionVout}`,
+    expiry_height: 0 // TODO: set expiry height as needed
   });
-
-  // Input 0: inscription UTXO (taproot key-path spend)
-  tx.addInput({
-    txid: inscriptionTxid,
-    index: inscriptionVout,
-    witnessUtxo: {
-      script: taprootPayment.script,
-      amount: inscriptionValue,
-    },
-    tapInternalKey: taprootXOnlyPub,
-    sighashType: btc.SigHash.SINGLE_ANYONECANPAY,
-  });
-
-  // Output 0: seller's payment (locked by SIGHASH_SINGLE — cannot be removed or changed)
-  tx.addOutputAddress(sellerPaymentAddress, salePrice);
-
-  // Sign input 0 with SIGHASH_SINGLE|ANYONECANPAY
-  tx.signIdx(taprootPrivKey, 0, [btc.SigHash.SINGLE_ANYONECANPAY]);
-
-  // Export as PSBT (NOT finalized — buyer must complete it)
-  return base64.encode(tx.toPSBT(0));
+  return signed.psbt_base64;
 }
 
 /**
@@ -708,86 +647,21 @@ function verifySellerPSBT(
 }
 
 /**
- * Buyer: complete a seller's PSBT, adding funding inputs and inscription output.
- *
- * After completion, the transaction atomically swaps the inscription for BTC:
- * - Seller's inscription goes to buyer's taproot address
- * - Buyer's BTC goes to seller's payment address
- *
+ * Buyer: complete a seller's PSBT, adding funding inputs and Doginals output.
+ * Uses Dogestash signing for DMP intent.
  * Returns the raw transaction hex ready for broadcast.
  */
 async function completeBuyerPSBT(
   psbtBase64Str: string,
-  buyerInscriptionAddress: string
+  buyerDoginalsAddress: string
 ): Promise<string> {
-  const psbtBytes = base64.decode(psbtBase64Str);
-  const tx = btc.Transaction.fromPSBT(psbtBytes, {
-    allowUnknownOutputs: true,
-    allowUnknownInputs: true,
+  // Use Dogestash DMP intent signing for bid
+  const signed = await signDMPIntent('bid', {
+    psbt_base64: psbtBase64Str,
+    doginals_address: buyerDoginalsAddress,
+    expiry_height: 0 // TODO: set expiry height as needed
   });
-
-  // tx has: Input 0 = seller's inscription (signed), Output 0 = seller's payment
-  const sellerPayment = tx.getOutput(0).amount!;
-
-  // Get buyer's funding UTXOs
-  const allUtxos = await getUTXOs(fundingAddr);
-  if (allUtxos.length === 0) throw new Error("No funding UTXOs for buyer");
-
-  // Select enough UTXOs to cover payment + inscription postage + fee
-  const POSTAGE = 546n;
-  const needed = sellerPayment + POSTAGE + 500n; // rough fee estimate
-  let totalFunding = 0n;
-  const selectedUtxos: typeof allUtxos = [];
-  for (const utxo of allUtxos.sort((a, b) => b.value - a.value)) {
-    selectedUtxos.push(utxo);
-    totalFunding += BigInt(utxo.value);
-    if (totalFunding >= needed) break;
-  }
-  if (totalFunding < needed) {
-    throw new Error(`Insufficient funds. Need ${needed} sats, have ${totalFunding}`);
-  }
-
-  // Add buyer's funding inputs
-  for (const utxo of selectedUtxos) {
-    const rawHex = await getTxHex(utxo.txid);
-    const rawTx = btc.Transaction.fromRaw(hex.decode(rawHex));
-    const prevOut = rawTx.getOutput(utxo.vout);
-
-    tx.addInput({
-      txid: utxo.txid,
-      index: utxo.vout,
-      witnessUtxo: {
-        script: prevOut.script!,
-        amount: BigInt(utxo.value),
-      },
-    });
-  }
-
-  // Output 1: inscription goes to buyer's taproot address (546 sats postage)
-  tx.addOutputAddress(buyerInscriptionAddress, POSTAGE);
-
-  // Calculate fee: ~68 vB per input, ~31 vB per output, ~11 vB overhead
-  const numInputs = 1 + selectedUtxos.length;
-  const numOutputs = 3; // seller payment + inscription + change
-  const estimatedVsize = BigInt(11 + numInputs * 68 + numOutputs * 31);
-  const fee = estimatedVsize; // 1 sat/vB
-
-  // Output 2: buyer's change
-  const change = totalFunding - sellerPayment - POSTAGE - fee;
-  if (change < 0n) {
-    throw new Error(`Insufficient after fee. Short by ${-change} sats`);
-  }
-  if (change > 546n) {
-    tx.addOutputAddress(fundingAddr, change);
-  }
-
-  // Sign all buyer inputs (indices 1+) with SIGHASH_ALL (default)
-  for (let i = 1; i <= selectedUtxos.length; i++) {
-    tx.signIdx(fundingPrivKey, i);
-  }
-
-  tx.finalize();
-  return hex.encode(tx.extract());
+  return signed.tx_hex;
 }
 
 // ── Reputation Feedback (shells out to give-feedback.ts) ────────────────
@@ -877,14 +751,14 @@ function statusIcon(status: string): string {
 
 function printTrade(trade: Trade): void {
   console.log(`\n${statusIcon(trade.status)} Trade #${trade.id}: ${trade.name}`);
-  console.log(`  Inscription: ${trade.inscriptionId}`);
-  console.log(`  Min price: ${trade.minPrice.toLocaleString()} sats`);
+  console.log(`  Doginal: ${trade.inscriptionId}`);
+  console.log(`  Min price: ${trade.minPrice.toLocaleString()} koinu`);
   if (trade.agreedPrice) {
-    console.log(`  Agreed price: ${trade.agreedPrice.toLocaleString()} sats`);
+    console.log(`  Agreed price: ${trade.agreedPrice.toLocaleString()} koinu`);
   }
   if (trade.counterparty) {
     console.log(`  Counterparty: ${trade.counterparty.name}`);
-    console.log(`    BTC: ${trade.counterparty.btc}`);
+    console.log(`    DOGE: ${trade.counterparty.btc}`);
     console.log(`    STX: ${trade.counterparty.stx}`);
   }
   console.log(`  Human approved: ${trade.humanApproved ? "YES" : "no"}`);
@@ -902,7 +776,7 @@ function printTrade(trade: Trade): void {
   }
   if (trade.atomicTxid) {
     console.log(`  Atomic tx: ${trade.atomicTxid}`);
-    console.log(`    https://mempool.space/tx/${trade.atomicTxid}`);
+    console.log(`    https://kabosu.dog/tx/${trade.atomicTxid}`);
   }
   if (trade.timeoutAt) {
     const remaining = new Date(trade.timeoutAt).getTime() - Date.now();
@@ -922,7 +796,7 @@ function printTrade(trade: Trade): void {
       // Display only structured fields — never raw freetext
       const m = entry.msg;
       let summary = m.a;
-      if ("p" in m) summary += ` ${m.p.toLocaleString()} sats`;
+      if ("p" in m) summary += ` ${m.p.toLocaleString()} koinu`;
       if ("pay" in m) summary += ` pay:${m.pay.slice(0, 12)}...`;
       if ("tx" in m) summary += ` tx:${m.tx.slice(0, 12)}...`;
       console.log(`    ${dir} ${entry.ts}: ${summary}`);

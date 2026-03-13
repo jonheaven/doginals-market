@@ -1,3 +1,9 @@
+# My Trades Page
+
+![My Trades Screenshot Placeholder](docs/my-trades-screenshot.png)
+
+This page shows your active and completed trades, including payout status and kabosu data.
+
 # End-to-End Flow
 
 1. Seller lists a Doginal for sale (creates a partially signed PSBT via dogestash).

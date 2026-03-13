@@ -5,13 +5,34 @@
  */
 async function settleTradePayout(trade: Trade): Promise<string> {
   if (!trade || trade.status !== "payment_detected" || !trade.paymentTxid || !trade.paymentAddress) {
-    throw new Error("Trade not ready for settlement");
+    throw new Error("Trade not ready for settlement: must be payment_detected with paymentTxid and paymentAddress.");
   }
-  // Find the inscription UTXO
-  const utxo = await getInscriptionUtxo(trade.inscriptionId);
-  if (!utxo) throw new Error("Inscription UTXO not found");
-  // Use Dogestash to create, sign, and broadcast the DMP settlement
-  const payoutTxid = await deliverInscription(utxo.txid, utxo.vout, trade.paymentAddress);
+  let utxo = null;
+  let attempts = 0;
+  while (!utxo && attempts < 3) {
+    try {
+      utxo = await getInscriptionUtxo(trade.inscriptionId);
+    } catch (err) {
+      console.error(`Attempt ${attempts + 1}: Failed to fetch inscription UTXO: ${err}`);
+    }
+    if (!utxo) {
+      await new Promise(r => setTimeout(r, 2000));
+      attempts++;
+    }
+  }
+  if (!utxo) throw new Error(`Inscription UTXO not found after ${attempts} attempts. Please retry later.`);
+  let payoutTxid = "";
+  attempts = 0;
+  while (!payoutTxid && attempts < 3) {
+    try {
+      payoutTxid = await deliverInscription(utxo.txid, utxo.vout, trade.paymentAddress);
+    } catch (err) {
+      console.error(`Attempt ${attempts + 1}: Payout delivery failed: ${err}`);
+      await new Promise(r => setTimeout(r, 2000));
+      attempts++;
+    }
+  }
+  if (!payoutTxid) throw new Error(`Failed to deliver payout after ${attempts} attempts. Please check network and retry.`);
   trade.deliveryTxid = payoutTxid;
   trade.status = "completed";
   await saveStore(await loadStore());
